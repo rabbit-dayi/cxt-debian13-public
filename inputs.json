@@ -1,0 +1,16 @@
+{
+  "kernel": "6.12.107+deb13-amd64",
+  "kernel_package_version": "6.12.107-1",
+  "installer_build": "20250803+deb13u7",
+  "installer_base_url": "https://deb.debian.org/debian/dists/trixie/main/installer-amd64/20250803+deb13u7/images/",
+  "archive_base_url": "https://deb.debian.org/debian/",
+  "storage_index_url": "https://deb.debian.org/debian/dists/trixie/main/debian-installer/binary-amd64/Packages.gz",
+  "integrity_note": "The cached official kernel/initrd matched Debian SHA256SUMS retrieved over HTTPS. Storage udebs matched the cached official Packages SHA256 entries. Detached archive signatures were not independently verified during original acquisition; pins below prevent silent replacement, not retrospective signature authentication.",
+  "files": {
+    "linux": {"sha256": "2b2358b37674d2505350528875bb17afae2a36522a9e8a9417eaca65a7da0e08", "relative_url": "netboot/debian-installer/amd64/linux"},
+    "initrd.gz": {"sha256": "57303d157cffce3fa402301667fbc9b2280aa7372082b081e777375ae49da5f2", "relative_url": "netboot/debian-installer/amd64/initrd.gz"},
+    "SHA256SUMS": {"sha256": "31a1a4fc99c5b0a729d261f137cd7e1599bfa6f214f83fe4e596543d8ccf2dec", "relative_url": "SHA256SUMS"},
+    "storage-Packages.gz": {"sha256": "108825f029ca2df1f575bb51b81ce2ea3a6c1a8a53a6d12121f08d2286caf042"}
+  },
+  "storage_modules": ["scsi-core", "cdrom-core", "scsi", "ata", "sata", "pata", "usb", "usb-storage"]
+}
