@@ -1,0 +1,84 @@
+#!/bin/sh
+set -eu
+umask 077
+. /usr/share/debconf/confmodule
+. /cxt/preflight-lib.sh
+state=/var/lib/cxt
+fail() {
+    logger -t cxt-install "ERROR: $1"
+    db_x_loadtemplatefile /cxt/templates cxt || true
+    db_subst cxt/late-error ERROR "$1" || true
+    db_fset cxt/late-error seen false || true
+    db_input critical cxt/late-error || true
+    db_go || true
+    exit 1
+}
+[ -s "$state/preflight.complete" ] || fail 'Missing disk/key authorization marker'
+[ -s "$state/disk" ] && [ -s "$state/github" ] || fail 'Missing preflight state'
+selected=$(cat "$state/disk")
+github=$(cat "$state/github")
+cxt_valid_github "$github" || fail 'A real GitHub account with verified SSH keys is required'
+[ -s "$state/authorized_keys" ] && [ -s "$state/fingerprints" ] || fail 'Validated GitHub SSH keys are missing'
+# Verify that /target really belongs to the disk authorized before partitioning.
+target_dev=$(awk '$5 == "/target" { print $3; exit }' /proc/self/mountinfo)
+[ -n "$target_dev" ] || fail '/target is not a mountpoint'
+cxt_uses_disk "/sys/dev/block/$target_dev" "/sys/class/block/${selected#/dev/}" || fail '/target is not on the authorized disk'
+if [ -d /sys/firmware/efi ]; then
+    [ -s /target/boot/efi/EFI/BOOT/BOOTX64.EFI ] || fail 'UEFI removable fallback EFI/BOOT/BOOTX64.EFI is missing'
+fi
+# Check rather than masking a user-setup failure: no usable password may exist.
+# Never print shadow fields, even when a check fails.
+awk -F: '
+    $1 == "root" { roots++; if ($2 != "!" && $2 != "*" && $2 != "!!" && $2 != "!*") bad=1 }
+    END { exit (roots != 1 || bad) }
+' /target/etc/shadow || fail 'Installed root password is not locked'
+awk -F: '$3 >= 1000 && $3 < 65534 { bad=1 } END { exit bad }' /target/etc/passwd || fail 'Unexpected ordinary user account exists'
+mkdir -p /target/root/.ssh /target/etc/ssh/sshd_config.d || fail 'Cannot create SSH directories'
+chmod 700 /target/root/.ssh || fail 'Cannot secure root .ssh directory'
+cp "$state/authorized_keys" /target/root/.ssh/authorized_keys || fail 'Cannot install SSH public keys'
+[ -s /target/root/.ssh/authorized_keys ] || fail 'Installed authorized_keys is empty'
+cmp -s "$state/authorized_keys" /target/root/.ssh/authorized_keys || fail 'Installed public keys differ from validated keys'
+chmod 600 /target/root/.ssh/authorized_keys || fail 'Cannot secure authorized_keys'
+chown 0:0 /target/root/.ssh /target/root/.ssh/authorized_keys || fail 'Cannot set root .ssh ownership'
+cat >/target/etc/ssh/sshd_config.d/00-cxt-root-login.conf <<'EOF'
+# Unofficial CXT Debian 13 Public modification: verified GitHub keys only.
+# Root's password remains locked; PAM account checks remain enabled.
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+UsePAM yes
+EOF
+chmod 644 /target/etc/ssh/sshd_config.d/00-cxt-root-login.conf || fail 'Cannot set SSH configuration permissions'
+# in-target bind-mounts the installer's /run over /target/run.
+in-target /bin/sh -c 'install -d -m 0755 /run/sshd && /usr/sbin/sshd -t' || fail 'sshd configuration validation failed'
+in-target --pass-stdout /usr/bin/ssh-keygen -l -E sha256 -f /root/.ssh/authorized_keys >"$state/installed.fingerprints" || fail 'Installed SSH keys failed validation'
+[ -s "$state/installed.fingerprints" ] || fail 'No installed SSH key fingerprints'
+in-target --pass-stdout /usr/sbin/sshd -T -C user=root,host=localhost,addr=127.0.0.1 >"$state/sshd.effective" || fail 'Cannot inspect effective SSH policy'
+for setting in 'permitrootlogin without-password' 'passwordauthentication no' 'kbdinteractiveauthentication no' 'pubkeyauthentication yes' 'usepam yes'; do
+    grep -Fxq "$setting" "$state/sshd.effective" || fail 'Effective SSH policy is not the required key-only policy'
+done
+in-target systemctl enable ssh || fail 'Cannot enable SSH server'
+logdir=/target/var/log/installer/cxt
+mkdir -p "$logdir" /target/var/lib/cxt-install || fail 'Cannot create installation records'
+chmod 700 "$logdir" /target/var/lib/cxt-install || fail 'Cannot protect installation records'
+cp "$state/disk" "$state/github" "$state/preflight.complete" "$state/fingerprints" "$state/installed.fingerprints" "$state/sshd.effective" "$logdir/" || fail 'Cannot preserve key-only installation records'
+for record in auto.valid mirror.requested mirror.region mirror.country mirror.host mirror.directory mirror.security-host mirror.evidence mirror.complete; do
+    if [ -f "$state/$record" ]; then
+        cp "$state/$record" "$logdir/" || fail 'Cannot preserve mirror/configuration records'
+    fi
+done
+# Do not copy debconf databases, shadow files, or downloaded key response bodies.
+if [ -f /var/log/syslog ]; then
+    cp /var/log/syslog "$logdir/installer-syslog" || fail 'Cannot preserve installer log'
+fi
+cat >/target/var/lib/cxt-install/complete <<EOF
+Unofficial CXT Debian 13 Public installation late checks completed.
+Root password locked; SSH public-key-only policy validated; keys nonempty.
+Disk: $selected
+GitHub SSH keys: $github
+UTC: $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+EOF
+chmod 600 /target/var/lib/cxt-install/complete || fail 'Cannot protect completion marker'
+logger -t cxt-install "Debian 13 Public late installation checks complete for $selected"
+exit 0
