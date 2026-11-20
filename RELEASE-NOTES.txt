@@ -1,0 +1,57 @@
+CXT Debian 13 Public — unofficial SSH-key-only modification
+
+Thanks to CXT / CXTHHHHH and the upstream project:
+https://www.cxthhhhh.com/network-reinstall-system-modify
+https://github.com/MeowLove/Network-Reinstall-System-Modify
+This is an unofficial modification, not an official or endorsed CXT/Debian release.
+
+Public release policy:
+- Debian 13 trixie amd64 SSH server + standard utilities network installer.
+- Official kernel 6.12.107+deb13-amd64 and fresh official netboot initrd, with
+  exact-kernel verified Debian storage udebs and same-version GRUB platforms.
+- Root password locked with no password hash or default credential; no ordinary
+  user. Root SSH accepts validated public keys only. PasswordAuthentication no,
+  PermitRootLogin prohibit-password, KbdInteractiveAuthentication no.
+- A user-supplied real GitHub account and nonempty validated SSH keys are
+  mandatory. No account is embedded, and legacy bypass configuration is rejected.
+- Original CXT tools, archives, legacy menu, ReadMe/password lists and private
+  image contents are not included. Raw and ISO share the hardened initrd.
+- Entire selected disk is erased only after required key and exact-disk
+  authorization. A configured raw slot explicitly authorizes automatic erasure
+  of its own whole source disk at next boot; read README before using it.
+- BIOS, x64 UEFI and IA32 EFI loaders are built. Unsigned Secure Boot is not
+  supported; IA32 runtime verification is not claimed.
+
+Verified public build and runtime results:
+- Fresh BIOS/domestic-mirror install, normal finish/reboot, real public-key SSH;
+  no hook replay. Installed root is locked, password login is disabled and a real
+  password authentication attempt was rejected; SSH and standard tools present.
+- Real GitHub keys were validated. A temporary acceptance public key was added
+  only in installer RAM for the SSH test, then removed; original fingerprints
+  matched afterward. No acceptance key is present in release images or source.
+- The unchanged production ISO booted through BIOS and x64 UEFI to the required
+  prepartition GitHub key prompt; blank target disks remained untouched.
+- Legacy skip authorization was rejected in an actual public initrd boot.
+- Credential/config inspection and configure/clear/reject checks passed;
+  raw/ISO hardened initrd bytes match and the initial authorization slot is zero.
+- Full UEFI install, overseas-mirror install, IA32 and physical hardware tests
+  were not performed for this public build. Secure Boot is unsupported.
+A prepartition UEFI ISO prompt is not a complete UEFI install test. A domestic
+install is not an overseas install test. A run stopped during downloads is not
+a passed installation. Test-only ephemeral keys must never ship in release assets.
+
+Release artifacts:
+CXT-Debian13-Public.raw.gz
+CXT-Debian13-Public.iso
+SHA256SUMS
+PUBLIC-BUILD.json
+
+See README for destructive-operation warnings, own-key prerequisites, trusted
+fingerprint checks, mirror behavior, recovery without a password fallback,
+rebuild instructions and the evidence-ready inspection checklist.
+
+Component licensing remains separate: see COPYRIGHT, COPYING (modification
+source only), and generated licenses/ package copyrights, common license texts,
+package versions and corresponding-source URLs. No single license is claimed
+for the whole image. Preserve source availability and all applicable notices
+when redistributing official components.
