@@ -1,0 +1,70 @@
+CXT Debian 13 Public — unofficial modification
+
+Thanks to CXT / CXTHHHHH and the Network-Reinstall-System-Modify project:
+https://www.cxthhhhh.com/network-reinstall-system-modify
+https://github.com/MeowLove/Network-Reinstall-System-Modify
+This project is an unofficial modification, not an official CXT or Debian release,
+and is not endorsed by either project. The public image deliberately contains no
+original CXT tool archives, original ReadMe, password lists, or legacy boot menu.
+Attribution does not import those payloads or their default access policies.
+
+The build-public.py script, configuration helper, boot menu, and public overlay
+adaptations in this repository are Copyright 2026 rabbit-dayi, made available
+under GPL-3.0-or-later; see COPYING. They are distributed without warranty.
+This statement covers these modifications ONLY. It does not license the complete
+image as one work, claim ownership of upstream programs, or replace any upstream
+copyright, license, exception, firmware condition, or trademark notice.
+
+Debian GNU/Linux installer 13 (trixie), installer build 20250803+deb13u7:
+https://www.debian.org/devel/debian-installer/
+https://deb.debian.org/debian/dists/trixie/main/installer-amd64/20250803+deb13u7/images/
+The image is assembled freshly from the official kernel and netboot initrd.
+The installer is an aggregation of separately licensed components. The builder
+preserves its original package status and generates installer-components.json
+with package/source versions, versioned source URLs, and per-source copyright
+URLs. A binary package's source package may have a different name. The Debian
+source package's debian/copyright file states that component's license terms.
+
+Linux 6.12.107+deb13-amd64, Debian source package linux 6.12.107-1:
+https://sources.debian.org/src/linux/6.12.107-1/
+https://sources.debian.org/src/linux/6.12.107-1/debian/copyright/
+Linux is primarily GPL-2.0-only with additional component-specific terms and
+exceptions documented in the corresponding source, including LICENSES/.
+Exact-kernel storage udebs are verified against official Packages SHA256 entries
+before only lib/modules/6.12.107+deb13-amd64 is merged into the usrmerged initrd.
+
+GNU GRUB (Debian source grub2), same-version tools and BIOS/x64 EFI/IA32 EFI
+modules, with package copyrights included under licenses/packages/:
+https://www.gnu.org/software/grub/
+https://sources.debian.org/src/grub2/
+GRUB is primarily GPL-3.0-or-later; its source/package copyright files cover
+exceptions and individual files. Unsigned loaders do not support Secure Boot.
+
+Additional embedded programs: curl/libcurl, OpenSSH ssh-keygen, GNU coreutils od,
+their loader/shared-library dependency closure, and ca-certificates trust roots.
+Their actual installed Debian package/source versions and source URLs are
+recorded in component-packages.json. Package copyright files are copied under
+licenses/packages/PACKAGE/copyright; full common license texts are included under
+licenses/common-licenses/. The same notices appear in the initrd under
+/usr/share/doc/cxt-debian13-public/ and on both raw and ISO boot volumes.
+Examples (not an exhaustive license list): curl uses the curl license, OpenSSH
+uses BSD-style terms, coreutils uses GPL-3.0-or-later, glibc uses LGPL terms with
+component exceptions, and the trust-root bundle has its own notices.
+
+Corresponding source and copyright resources:
+https://sources.debian.org/ (browse exact source package/version from manifests)
+https://deb.debian.org/debian/pool/ (Debian .dsc and orig/debian source archives)
+https://snapshot.debian.org/ (archived exact versions if removed from mirrors)
+https://www.debian.org/legal/licenses/
+On a Debian system with matching deb-src entries, use:
+    apt-get source 'SOURCE_PACKAGE=SOURCE_VERSION'
+Use source package names/versions from the generated manifests, not an assumed
+binary package name. Keep corresponding source available with binary releases
+as required by the respective component licenses; do not substitute this notice
+for those obligations. The new overlay and builder corresponding source is this
+public repository. The raw/ISO are network installers, not installed OS backups.
+
+Input integrity: inputs.json pins the official cached files. Their original
+acquisition checked SHA256SUMS or Packages through verified HTTPS; detached
+Debian signatures were not independently checked at that acquisition step.
+Normal Debian installer/APT archive signature verification remains enabled.
