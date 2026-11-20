@@ -1,0 +1,53 @@
+Template: cxt/github
+Type: string
+Description: GitHub username for root SSH public keys:
+ Enter a GitHub username, not a URL. Only publicly registered SSH keys from
+ https://github.com/USERNAME.keys will be downloaded over verified HTTPS.
+ A nonempty set of valid keys is mandatory. No password login is provided.
+
+Template: cxt/keys-confirm
+Type: boolean
+Default: false
+Description: Trust these SSH public keys for root login?
+ GitHub account: ${USERNAME}
+ .
+ ${FINGERPRINTS}
+ .
+ These are SSH public keys, not X.509 certificates. Confirm the fingerprints
+ against a trusted source. Rejecting returns to GitHub username selection.
+
+Template: cxt/error
+Type: error
+Description: Preflight cannot continue safely
+ ${ERROR}
+ .
+ No disk has been authorized for partitioning. Correct the problem and retry.
+ Network failures are not treated as successful key retrieval.
+
+Template: cxt/disk
+Type: select
+Choices: ${DISKS}
+Description: Entire disk to ERASE for Debian 13:
+ All partitions and data on the selected disk will be destroyed. Mounted
+ disks, read-only devices and active swap backing disks are excluded.
+ .
+ ${DETAILS}
+
+Template: cxt/erase
+Type: string
+Description: Type ERASE to destroy all data on ${DISK}:
+ Target: ${DISK}
+ ${DETAILS}
+ .
+ Debian 13 will replace the entire disk, including the old DD installer.
+ Type exactly ERASE to authorize this operation. Any other answer returns
+ to disk selection. This is the last interactive disk warning.
+
+Template: cxt/late-error
+Type: error
+Description: Final installation checks did not pass
+ ${ERROR}
+ .
+ The chosen disk has already been repartitioned and Debian installation is
+ not complete. Use the installer shell to diagnose the problem, then retry.
+ Do not assume the original disk contents remain intact.
