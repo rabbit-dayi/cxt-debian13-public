@@ -1,0 +1,53 @@
+#!/bin/sh
+set -eu
+umask 077
+state=/var/lib/cxt
+mkdir -p "$state"
+rm -f "$state/auto.valid"
+# Netboot normally downloads disk modules only after choosing a mirror. Embed
+# exact-kernel storage modules and probe them now to read the local region first.
+for driver in virtio_blk virtio_scsi nvme ahci ata_piix xen_blkfront usb_storage uas; do
+    modprobe "$driver" 2>/dev/null || true
+done
+udevadm trigger --action=add --subsystem-match=pci || exit 1
+udevadm settle || exit 1
+list-devices disk >"$state/disks.detected" || exit 1
+if [ ! -s "$state/disks.detected" ]; then
+    logger -t cxt-config 'No disks detected before mirror selection; cannot safely inspect automatic configuration'
+    exit 1
+fi
+if ! /cxt/read-auto >"$state/auto.pending"; then
+    rm -f "$state/auto.pending"
+    logger -t cxt-config 'Invalid or ambiguous disk configuration; automatic installation blocked'
+    exit 1
+fi
+# Reject a forbidden kernel override even if a disk slot is also present.
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in cxt.github=*)
+        case "${arg#cxt.github=}" in [Ss][Kk][Ii][Pp])
+            logger -t cxt-config 'Public image requires verified GitHub SSH keys; bypass rejected'
+            exit 1 ;;
+        esac ;;
+    esac
+done
+region=auto
+if [ -s "$state/auto.pending" ]; then
+    mv "$state/auto.pending" "$state/auto.valid"
+    while IFS='=' read -r key value; do
+        case "$key" in region) region=$value ;; esac
+    done <"$state/auto.valid"
+    # Two independent sources of erase authorization must not disagree.
+    for arg in $(cat /proc/cmdline); do
+        case "$arg" in cxt.disk=*|cxt.github=*|cxt.confirm=*|cxt.region=*)
+            logger -t cxt-config 'Do not mix disk configuration and cxt.* kernel arguments'
+            rm -f "$state/auto.valid"
+            exit 1 ;;
+        esac
+    done
+else
+    rm -f "$state/auto.pending"
+    for arg in $(cat /proc/cmdline); do
+        case "$arg" in cxt.region=*) region=${arg#cxt.region=} ;; esac
+    done
+fi
+/cxt/select-mirror "$region"
