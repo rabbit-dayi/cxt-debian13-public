@@ -1,0 +1,112 @@
+#!/bin/sh
+# Read-only unattended-install authorization. Never source the slot's contents.
+set -u
+LC_ALL=C
+export LC_ALL
+umask 077
+work=$(mktemp -d /tmp/cxt-read-auto.XXXXXX) || exit 1
+trap 'rm -rf "$work"' EXIT
+trap 'exit 1' HUP INT TERM
+fail() {
+    printf '%s\n' "CXT automatic configuration: $*" >&2
+    exit 1
+}
+
+# A marker is meaningful only on our exact MBR/FAT32 boot-image layout.
+image_identity() {
+    dd if="$disk" of="$work/mbr" bs=512 count=1 2>/dev/null || return 1
+    dd if="$disk" of="$work/fat" bs=512 skip=2048 count=1 2>/dev/null || return 1
+    [ "$(wc -c <"$work/mbr")" -eq 512 ] || return 1
+    [ "$(wc -c <"$work/fat")" -eq 512 ] || return 1
+    cat "$work/mbr" "$work/fat" >"$work/identity" || return 1
+    od -An -v -tu1 "$work/identity" >"$work/bytes" || return 1
+    awk '
+        { for (i=1; i<=NF; i++) b[n++]=$i }
+        function le(o, k, v, m, j) {
+            v=0; m=1
+            for (j=0; j<k; j++) { v+=b[o+j]*m; m*=256 }
+            return v
+        }
+        END {
+            if (n!=1024 || b[510]!=85 || b[511]!=170) exit 1
+            if (b[446]!=128 || b[450]!=239 || le(454,4)!=2048 || le(458,4)!=2095104) exit 1
+            for (j=462; j<510; j++) if (b[j]!=0) exit 1
+            o=512
+            if (le(o+11,2)!=512 || b[o+16]!=2 || le(o+17,2)!=0 || le(o+19,2)!=0) exit 1
+            if (le(o+22,2)!=0 || le(o+28,4)!=2048 || le(o+32,4)!=2095104) exit 1
+            if (le(o+36,4)==0 || le(o+42,2)!=0 || le(o+44,4)<2 || b[o+66]!=41) exit 1
+            if (b[o+510]!=85 || b[o+511]!=170) exit 1
+            label=""; kind=""
+            for (j=71; j<82; j++) label=label sprintf("%c",b[o+j])
+            for (j=82; j<90; j++) kind=kind sprintf("%c",b[o+j])
+            if (label!="CXTDEB13   " || kind!="FAT32   ") exit 1
+        }
+    ' "$work/bytes"
+}
+
+list-devices disk >"$work/disks" || fail 'cannot enumerate whole disks'
+: >"$work/seen" || fail 'cannot create scan state'
+found=0
+while IFS= read -r candidate || [ -n "$candidate" ]; do
+    [ -n "$candidate" ] || continue
+    disk=$(readlink -f "$candidate") || fail 'cannot resolve a disk'
+    case "$disk" in /dev/*) ;; *) fail 'invalid whole-disk path' ;; esac
+    name=${disk#/dev/}
+    case "$name" in ''|*[!A-Za-z0-9_.-]*) fail 'invalid whole-disk name' ;; esac
+    [ -b "$disk" ] && [ -d "/sys/class/block/$name" ] &&
+        [ ! -e "/sys/class/block/$name/partition" ] || fail 'enumerated device is not a whole disk'
+    if grep -Fxq "$disk" "$work/seen"; then continue; fi
+    printf '%s\n' "$disk" >>"$work/seen" || fail 'cannot record a disk'
+    sectors=$(cat "/sys/class/block/$name/size") || fail "cannot inspect $disk size"
+    case "$sectors" in ''|*[!0-9]*) fail "invalid $disk size" ;; esac
+    [ "$sectors" -ge 2097160 ] || continue
+    dd if="$disk" of="$work/slot" bs=512 skip=2097152 count=8 2>/dev/null || fail "cannot read $disk configuration slot"
+    [ "$(wc -c <"$work/slot")" -eq 4096 ] || fail "short configuration read on $disk"
+    od -An -v -tu1 "$work/slot" >"$work/slot.bytes" || fail 'cannot decode configuration slot'
+    # Non-CXT data, including an all-zero slot, is not configuration. Once a
+    # CXT prefix is present, every byte must satisfy the format or boot blocks.
+    awk '
+        { for (i=1; i<=NF; i++) b[n++]=$i }
+        END {
+            if (n!=4096) exit 1
+            if (b[0]!=67 || b[1]!=88 || b[2]!=84) exit 3
+            end=0
+            while (end<n && b[end]!=0) end++
+            if (end==n || end==0 || b[end-1]!=10) exit 1
+            for (i=end; i<n; i++) if (b[i]!=0) exit 1
+            text=""
+            for (i=0; i<end; i++) {
+                if (b[i]!=10 && (b[i]<33 || b[i]>126)) exit 1
+                text=text sprintf("%c",b[i])
+            }
+            count=split(text,lines,"\n")
+            if (count!=5 || lines[1]!="CXT-AUTO-V1" || lines[5]!="") exit 1
+            for (i=2; i<=4; i++) {
+                if (split(lines[i],pair,"=")!=2 || pair[2]=="" || seen[pair[1]]++) exit 1
+                if (pair[1]=="region") region=pair[2]
+                else if (pair[1]=="github") github=pair[2]
+                else if (pair[1]=="confirm") confirm=pair[2]
+                else exit 1
+            }
+            if (region!="auto" && region!="cn" && region!="global") exit 1
+            if (confirm!="ERASE" || tolower(github)=="skip" || length(github)<1 || length(github)>39) exit 1
+            if (github !~ /^[A-Za-z0-9-]+$/ || github ~ /^-/ || github ~ /-$/ || github ~ /--/) exit 1
+            printf "region=%s\ngithub=%s\nconfirm=ERASE\n", region, github
+        }
+    ' "$work/slot.bytes" >"$work/parsed"
+    status=$?
+    case "$status" in
+        3) continue ;;
+        0) ;;
+        *) fail "malformed CXT configuration on $disk" ;;
+    esac
+    image_identity || fail "CXT configuration on $disk does not belong to a CXTDEB13 boot image"
+    [ "$found" -eq 0 ] || fail 'multiple configured disks; refusing automatic installation'
+    {
+        printf 'disk=%s\n' "$disk"
+        cat "$work/parsed"
+    } >"$work/result" || fail 'cannot save validated configuration'
+    found=1
+done <"$work/disks"
+[ "$found" -eq 0 ] || cat "$work/result" || fail 'cannot return validated configuration'
+exit 0
