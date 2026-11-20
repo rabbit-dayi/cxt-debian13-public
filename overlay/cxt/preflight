@@ -1,0 +1,148 @@
+#!/bin/sh
+set -u
+umask 077
+. /usr/share/debconf/confmodule
+. /cxt/preflight-lib.sh
+state=/var/lib/cxt
+mkdir -p "$state" || exit 1
+# Never allow an earlier, incomplete attempt to authorize partitioning.
+rm -f "$state/preflight.complete"
+db_x_loadtemplatefile /cxt/templates cxt || exit 1
+
+ask() {
+    db_fset "$1" seen false || return 1
+    db_input critical "$1" || [ "$?" -eq 30 ] || return 1
+    db_go || return 1
+    db_get "$1"
+}
+problem() {
+    db_subst cxt/error ERROR "$1" || exit 1
+    ask cxt/error || exit 1
+}
+for executable in curl ssh-keygen list-devices readlink; do
+    command -v "$executable" >/dev/null 2>&1 || {
+        problem "Missing installer dependency: $executable. Rebuild the initrd."
+        exit 1
+    }
+done
+[ -s /etc/ssl/certs/ca-certificates.crt ] || {
+    problem 'Missing HTTPS CA certificates. Rebuild the initrd.'
+    exit 1
+}
+github_arg=
+disk_arg=
+confirm_arg=
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+        cxt.github=*)
+            github_arg=${arg#cxt.github=}
+            case "$github_arg" in [Ss][Kk][Ii][Pp])
+                problem 'GitHub SSH keys are mandatory in the public image; cxt.github cannot disable key retrieval.'
+                exit 1 ;;
+            esac ;;
+        cxt.disk=*) disk_arg=${arg#cxt.disk=} ;;
+        cxt.confirm=*) confirm_arg=${arg#cxt.confirm=} ;;
+    esac
+done
+if [ -s "$state/auto.valid" ]; then
+    if ! /cxt/read-auto >"$state/auto.recheck" || ! cmp -s "$state/auto.valid" "$state/auto.recheck"; then
+        problem 'Disk configuration changed after mirror selection; partitioning blocked. Reboot with one valid configuration.'
+        exit 1
+    fi
+    while IFS='=' read -r key value; do
+        case "$key" in
+            disk) disk_arg=$value ;;
+            github) github_arg=$value ;;
+            confirm) confirm_arg=$value ;;
+        esac
+    done <"$state/auto.valid"
+fi
+automatic=false
+if [ -n "$github_arg" ] && [ -n "$disk_arg" ] && [ "$confirm_arg" = ERASE ]; then
+    automatic=true
+fi
+username=$github_arg
+while :; do
+    if [ -z "$username" ]; then
+        ask cxt/github || exit 1
+        username=$RET
+    fi
+    if ! cxt_valid_github "$username"; then
+        problem 'Invalid GitHub username: use 1-39 ASCII letters/digits with single interior hyphens. A real account with SSH keys is required.'
+        username=
+        automatic=false
+        continue
+    fi
+    if ! cxt_fetch_keys "$username" "$state"; then
+        problem 'GitHub HTTPS retrieval failed, returned no keys, or contained an invalid key. Check network/time/CA trust and retry, or choose another account with keys; key retrieval cannot be bypassed.'
+        username=
+        automatic=false
+        continue
+    fi
+    fingerprints=$(tr '\n' ';' <"$state/fingerprints")
+    db_subst cxt/keys-confirm USERNAME "$username" || exit 1
+    db_subst cxt/keys-confirm FINGERPRINTS "$fingerprints" || exit 1
+    if [ "$automatic" != true ]; then
+        db_set cxt/keys-confirm false || exit 1
+        ask cxt/keys-confirm || exit 1
+        if [ "$RET" != true ]; then
+            username=
+            rm -f "$state/authorized_keys" "$state/fingerprints"
+            continue
+        fi
+    fi
+    printf '%s\n' "$username" >"$state/github"
+    logger -t cxt-preflight "Validated GitHub SSH key fingerprints for $username: $fingerprints"
+    break
+done
+
+selected=$disk_arg
+while :; do
+    choices=
+    details=
+    for disk in $(list-devices disk); do
+        cxt_disk_safe "$disk" || continue
+        name=${disk#/dev/}
+        sectors=$(cat "/sys/class/block/$name/size")
+        model=$(cat "/sys/class/block/$name/device/model" 2>/dev/null || true)
+        choices=${choices:+$choices, }$disk
+        details="$details $disk: $sectors sectors (512 bytes each), $model;"
+    done
+    if [ -z "$choices" ]; then
+        problem 'No safe writable whole disk is available. Mounted disks and active swap disks cannot be selected. Return to the installer shell to correct the storage setup, then retry.'
+        selected=
+        automatic=false
+        continue
+    fi
+    if [ -n "$selected" ]; then
+        # Membership uses literal delimited device names, not a user regex.
+        case ", $choices, " in *", $selected, "*) ;;
+            *) problem 'The requested disk does not exist, is mounted/in use, or is not a writable whole disk.'
+               selected=
+               automatic=false ;;
+        esac
+    fi
+    if [ -z "$selected" ]; then
+        db_subst cxt/disk DISKS "$choices" || exit 1
+        db_subst cxt/disk DETAILS "$details" || exit 1
+        ask cxt/disk || exit 1
+        selected=$RET
+    fi
+    cxt_disk_safe "$selected" || { selected=; automatic=false; continue; }
+    if [ "$automatic" != true ]; then
+        db_subst cxt/erase DISK "$selected" || exit 1
+        db_subst cxt/erase DETAILS "$details" || exit 1
+        db_set cxt/erase '' || exit 1
+        ask cxt/erase || exit 1
+        [ "$RET" = ERASE ] || { selected=; continue; }
+    fi
+    # Recheck immediately before recording the exact authorized target.
+    cxt_disk_safe "$selected" || { selected=; automatic=false; continue; }
+    db_set partman-auto/disk "$selected" || exit 1
+    db_set grub-installer/bootdev "$selected" || exit 1
+    printf '%s\n' "$selected" >"$state/disk" || exit 1
+    printf '%s\n' 'GitHub keys validated; exact disk erase authorized.' >"$state/preflight.complete" || exit 1
+    logger -t cxt-preflight "Authorized entire-disk Debian 13 install on $selected; GitHub choice: $username"
+    break
+done
+exit 0
