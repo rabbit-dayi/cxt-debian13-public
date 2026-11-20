@@ -1,0 +1,73 @@
+{
+  "status": "verified_public_key_only_bios_install_and_bios_uefi_optical_boot",
+  "verified_at": "2026-11-21T01:01:46.372081+08:00",
+  "password_authentication": "disabled; actual failed password attempt checked",
+  "root_password": "locked, no fixed credential",
+  "legacy_payload": "not included",
+  "installed_system": {
+    "status": "passed",
+    "firmware": "bios",
+    "fresh_full_install": true,
+    "debian": "13",
+    "ssh_public_key_authentication": true,
+    "root_password": "locked, hash not exposed",
+    "password_authentication": "disabled and real password authentication rejected",
+    "root_ssh_policy": "prohibit-password",
+    "temporary_acceptance_key": "removed; original GitHub fingerprints matched",
+    "github_account": "torvalds test fixture only, not embedded default",
+    "ssh_and_standard_utilities": true,
+    "selected_mirror": "mirrors.cernet.edu.cn",
+    "physical_disks_used": false,
+    "method": "real GitHub validation; temporary test public key appended in installer RAM after trust confirmation, no hook replay; key removed after SSH acceptance"
+  },
+  "artifact_inspection": {
+    "status": "passed",
+    "initrd_files_scanned": 2000,
+    "password_crypt_values_found": 0,
+    "private_ssh_keys_found": 0,
+    "fixed_root_password_file": "absent",
+    "root_preseed": "hash-free lock marker",
+    "raw_initial_slot": "all zero",
+    "raw_iso_initrd_sha256": "12eeae3c6bb9231aaace61227841a852a12c7ad23a79f52be30f4d11563dd71a",
+    "raw_iso_payload": "identical",
+    "old_cxt_legacy_payload": "absent; clean Debian-only tree",
+    "host_config_valid_and_clear": "passed on disposable image",
+    "host_config_skip_uppercase_skip_malformed_name": "rejected without changing existing image",
+    "physical_disks_written": false,
+    "credential_scan_scope": "non-ELF initrd configuration/text; official crypto ELF algorithm/key self-test vectors are not host/account credentials; embedded Debian package/source manifests retained"
+  },
+  "optical_boot": {
+    "bios": {
+      "status": "passed",
+      "firmware": "bios",
+      "iso_sha256": "f69b2707ae8a5086207e3afb5ce446fb4e99562c9fe70bc5a65af7380f0d30d4",
+      "production_iso_modified": false,
+      "boot_arguments": "serial and cxt.region=cn; no erase authorization",
+      "real_installer_reached": "required GitHub SSH key selection before partitioning",
+      "blank_target_unchanged": true,
+      "physical_disk_used": false
+    },
+    "uefi": {
+      "status": "passed",
+      "firmware": "uefi",
+      "iso_sha256": "f69b2707ae8a5086207e3afb5ce446fb4e99562c9fe70bc5a65af7380f0d30d4",
+      "production_iso_modified": false,
+      "boot_arguments": "serial and cxt.region=cn; no erase authorization",
+      "real_installer_reached": "required GitHub SSH key selection before partitioning",
+      "blank_target_unchanged": true,
+      "physical_disk_used": false
+    }
+  },
+  "uefi_full_install": "not performed for this public build",
+  "overseas_full_install": "not repeated; user requested stopping equivalent mirror-only test",
+  "secure_boot": "unsupported unsigned",
+  "ia32_efi": "built, not runtime tested",
+  "legacy_skip_negative_boot": {
+    "status": "passed",
+    "real_public_bios_kernel_initrd": true,
+    "legacy_skip_slot": "rejected without producing authorization",
+    "skip_as_github_username": "rejected",
+    "partitioning_started": false,
+    "physical_disk_used": false
+  }
+}
